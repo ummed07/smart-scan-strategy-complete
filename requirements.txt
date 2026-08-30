@@ -4,6 +4,7 @@ scikit-learn>=1.3.0
 matplotlib>=3.8.0
 plotly>=5.18.0
 streamlit>=1.29.0
+django>=5.0.0
 
 # Optional (future reinforcement-learning module)
 # gymnasium>=0.29.0

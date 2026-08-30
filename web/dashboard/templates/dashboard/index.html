@@ -1,0 +1,269 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Scan Strategy — RF Simulation Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'dashboard/css/app.css' %}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon" aria-hidden="true">📡</div>
+        <div>
+          <h1>Smart Scan</h1>
+          <p>EW Simulation Lab</p>
+        </div>
+      </div>
+
+      <form id="config-form" class="sidebar-form">
+        <section class="form-section">
+          <h3>Simulation</h3>
+          <label>Frequency bands <span id="val-num_bands">20</span>
+            <input type="range" name="num_bands" min="4" max="40" value="20">
+          </label>
+          <label>Time slots <span id="val-num_time_slots">1000</span>
+            <input type="range" name="num_time_slots" min="50" max="2000" step="50" value="1000">
+          </label>
+          <label>Emitters <span id="val-num_emitters">5</span>
+            <input type="range" name="num_emitters" min="1" max="12" value="5">
+          </label>
+          <label>Random seed
+            <input type="number" name="random_seed" min="0" value="42">
+          </label>
+          <label>Transmission probability <span id="val-transmission_probability">0.30</span>
+            <input type="range" name="transmission_probability" min="0.05" max="0.90" step="0.05" value="0.30">
+          </label>
+          <label>Noise level <span id="val-noise_level">0.00</span>
+            <input type="range" name="noise_level" min="0" max="1" step="0.05" value="0">
+          </label>
+        </section>
+
+        <section class="form-section">
+          <h3>Detector</h3>
+          <label>Detection probability (Pd) <span id="val-detection_probability">0.85</span>
+            <input type="range" name="detection_probability" min="0" max="1" step="0.01" value="0.85">
+          </label>
+          <label>False alarm rate (Pfa) <span id="val-false_alarm_probability">0.05</span>
+            <input type="range" name="false_alarm_probability" min="0" max="1" step="0.01" value="0.05">
+          </label>
+        </section>
+
+        <section class="form-section">
+          <h3>Scheduler</h3>
+          <label>Dwell time <span id="val-dwell_time">1</span>
+            <input type="range" name="dwell_time" min="1" max="10" value="1">
+          </label>
+          <label>Exploration factor <span id="val-exploration_factor">0.20</span>
+            <input type="range" name="exploration_factor" min="0" max="1" step="0.05" value="0.20">
+          </label>
+        </section>
+
+        <section class="form-section">
+          <h3>Machine Learning</h3>
+          <label>Recent window <span id="val-recent_window">10</span>
+            <input type="range" name="recent_window" min="3" max="50" value="10">
+          </label>
+          <label>Train fraction <span id="val-train_fraction">0.70</span>
+            <input type="range" name="train_fraction" min="0.5" max="0.95" step="0.05" value="0.70">
+          </label>
+          <label>Random forest trees <span id="val-random_forest_estimators">100</span>
+            <input type="range" name="random_forest_estimators" min="20" max="300" step="10" value="100">
+          </label>
+        </section>
+
+        <section class="form-section">
+          <h3>Heatmap View</h3>
+          <div class="grid-2">
+            <label>Time start<input type="number" name="time_start" min="0" value="0"></label>
+            <label>Time end<input type="number" name="time_end" min="1" value="200"></label>
+            <label>Band start<input type="number" name="band_start" min="0" value="0"></label>
+            <label>Band end<input type="number" name="band_end" min="1" value="20"></label>
+          </div>
+        </section>
+      </form>
+
+      <div class="sidebar-actions">
+        <button type="button" class="btn btn-primary" data-action="generate">Generate Environment</button>
+        <button type="button" class="btn btn-secondary" data-action="sequential">Run Sequential</button>
+        <button type="button" class="btn btn-secondary" data-action="random">Run Random</button>
+        <button type="button" class="btn btn-accent" data-action="train">Train ML Model</button>
+        <button type="button" class="btn btn-accent" data-action="smart">Run Smart ML</button>
+        <button type="button" class="btn btn-highlight" data-action="compare">Run Comparison</button>
+        <button type="button" class="btn btn-ghost" data-action="reset">Reset Session</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Educational simulation only — synthetic data, no real RF hardware</p>
+          <h2>Smart Scan Strategy Simulator</h2>
+          <p class="subtitle">Compare sequential, random, and ML-driven frequency scanning under a single-receiver constraint.</p>
+        </div>
+        <div class="status-pills" id="status-pills">
+          <span class="pill pill-muted" id="pill-env">Environment: —</span>
+          <span class="pill pill-muted" id="pill-model">Model: —</span>
+          <span class="pill pill-muted" id="pill-compare">Comparison: —</span>
+        </div>
+      </header>
+
+      <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+      <div class="metric-row" id="hero-metrics">
+        <div class="metric-card"><span class="metric-label">Bands × Time</span><span class="metric-value" id="m-bands-time">—</span></div>
+        <div class="metric-card"><span class="metric-label">Occupancy</span><span class="metric-value" id="m-occupancy">—</span></div>
+        <div class="metric-card"><span class="metric-label">Active Bands</span><span class="metric-value" id="m-active-bands">—</span></div>
+        <div class="metric-card"><span class="metric-label">Events</span><span class="metric-value" id="m-events">—</span></div>
+      </div>
+
+      <nav class="tab-nav" role="tablist">
+        <button class="tab active" data-tab="overview" role="tab">Overview</button>
+        <button class="tab" data-tab="environment" role="tab">Environment</button>
+        <button class="tab" data-tab="receiver" role="tab">Receiver</button>
+        <button class="tab" data-tab="ml" role="tab">ML Prediction</button>
+        <button class="tab" data-tab="smart" role="tab">Smart Scheduler</button>
+        <button class="tab" data-tab="performance" role="tab">Performance</button>
+        <button class="tab" data-tab="comparison" role="tab">Comparison</button>
+      </nav>
+
+      <div class="tab-panels">
+        <section class="tab-panel active" id="panel-overview" role="tabpanel">
+          <div class="card-grid">
+            <article class="card card-wide">
+              <h3>What this simulates</h3>
+              <p>A receiver that can only watch <strong>one frequency band at a time</strong> must decide where to tune next — with no prior intelligence about emitters. Three strategies compete on the same synthetic battlefield.</p>
+            </article>
+            <article class="card">
+              <div class="strategy-icon seq">01</div>
+              <h4>Sequential</h4>
+              <p>Round-robin scan — the conventional baseline.</p>
+            </article>
+            <article class="card">
+              <div class="strategy-icon rnd">02</div>
+              <h4>Random</h4>
+              <p>Uniform random band selection each step.</p>
+            </article>
+            <article class="card">
+              <div class="strategy-icon ml">03</div>
+              <h4>Smart ML</h4>
+              <p>Random Forest predictions + exploration bonus.</p>
+            </article>
+          </div>
+          <article class="card card-wide architecture-card">
+            <h3>System flow</h3>
+            <pre class="architecture-diagram">Simulated Environment  →  Receiver (1 band/slot)  →  Detector (Pd/Pfa)
+        │                                                   │
+   Ground truth                                HIT / MISS / FALSE_ALARM
+                                                             │
+                                              Feature Update (BandStatsTracker)
+                                                             │
+                                         ML Prediction (RandomForest)
+                                                             │
+                                      Smart Scheduler (exploit + explore) → next band</pre>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-environment" role="tabpanel">
+          <div class="panel-toolbar">
+            <a class="btn btn-ghost btn-sm" href="/api/download/environment/" id="dl-env">Download CSV</a>
+          </div>
+          <div class="chart-card"><div id="chart-environment" class="plotly-chart"></div></div>
+          <article class="card">
+            <h3>Emitter information</h3>
+            <div class="table-wrap"><table class="data-table" id="emitter-table"><thead></thead><tbody></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-receiver" role="tabpanel">
+          <div class="panel-toolbar">
+            <button type="button" class="btn btn-secondary btn-sm" data-action="demo-sweep">Run Demo Sweep</button>
+            <a class="btn btn-ghost btn-sm" href="/api/download/observations/" id="dl-obs">Download Observations</a>
+          </div>
+          <div class="chart-card"><div id="chart-receiver" class="plotly-chart"></div></div>
+          <div class="chart-card chart-half"><div id="chart-outcomes" class="plotly-chart"></div></div>
+          <article class="card">
+            <h3>Scan history</h3>
+            <div class="table-wrap table-scroll"><table class="data-table" id="receiver-table"><thead></thead><tbody></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-ml" role="tabpanel">
+          <div class="metric-row metric-row-sm" id="ml-metrics">
+            <div class="metric-card"><span class="metric-label">Accuracy</span><span class="metric-value" id="ml-acc">—</span></div>
+            <div class="metric-card"><span class="metric-label">Precision</span><span class="metric-value" id="ml-prec">—</span></div>
+            <div class="metric-card"><span class="metric-label">Recall</span><span class="metric-value" id="ml-rec">—</span></div>
+            <div class="metric-card"><span class="metric-label">F1 Score</span><span class="metric-value" id="ml-f1">—</span></div>
+          </div>
+          <div class="chart-grid-2">
+            <div class="chart-card"><div id="chart-cm" class="plotly-chart"></div></div>
+            <div class="chart-card"><div id="chart-importance" class="plotly-chart"></div></div>
+          </div>
+          <div class="chart-card"><div id="chart-probabilities" class="plotly-chart"></div></div>
+        </section>
+
+        <section class="tab-panel" id="panel-smart" role="tabpanel">
+          <div class="metric-row metric-row-sm" id="smart-metrics">
+            <div class="metric-card"><span class="metric-label">Decisions</span><span class="metric-value" id="sm-decisions">—</span></div>
+            <div class="metric-card"><span class="metric-label">Exploration moves</span><span class="metric-value" id="sm-explore">—</span></div>
+            <div class="metric-card"><span class="metric-label">Exploration ratio</span><span class="metric-value" id="sm-ratio">—</span></div>
+          </div>
+          <div class="chart-grid-2">
+            <div class="chart-card"><div id="chart-smart-decisions" class="plotly-chart"></div></div>
+            <div class="chart-card"><div id="chart-smart-priority" class="plotly-chart"></div></div>
+          </div>
+          <article class="card">
+            <h3>Scheduler scan history</h3>
+            <div class="table-wrap table-scroll"><table class="data-table" id="smart-table"><thead></thead><tbody></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-performance" role="tabpanel">
+          <div class="panel-toolbar">
+            <label class="select-label">Scheduler
+              <select id="perf-scheduler">
+                <option value="Sequential">Sequential</option>
+                <option value="Random">Random</option>
+                <option value="Smart ML">Smart ML</option>
+              </select>
+            </label>
+          </div>
+          <div class="metric-row" id="perf-metrics"></div>
+          <article class="card card-wide">
+            <h3>Metric definitions</h3>
+            <dl class="metric-defs" id="metric-defs"></dl>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="panel-comparison" role="tabpanel">
+          <div class="panel-toolbar">
+            <a class="btn btn-ghost btn-sm" href="/api/download/comparison/" id="dl-compare">Download Table</a>
+          </div>
+          <article class="card">
+            <h3>Sequential vs Random vs Smart ML</h3>
+            <div class="table-wrap"><table class="data-table" id="comparison-table"><thead></thead><tbody></tbody></table></div>
+          </article>
+          <div class="chart-grid-2" id="comparison-charts"></div>
+          <div class="chart-card"><div id="chart-comparison-scatter" class="plotly-chart"></div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="loading-overlay hidden" id="loading">
+    <div class="spinner"></div>
+    <p>Running simulation…</p>
+  </div>
+
+  <script>
+    window.CSRF_TOKEN = "{{ csrf_token }}";
+  </script>
+  <script src="{% static 'dashboard/js/app.js' %}"></script>
+</body>
+</html>
