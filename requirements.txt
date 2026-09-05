@@ -5,7 +5,7 @@ matplotlib>=3.8.0
 plotly>=5.18.0
 streamlit>=1.29.0
 django>=5.0.0
-
+gunicorn
 # Optional (future reinforcement-learning module)
 # gymnasium>=0.29.0
 # stable-baselines3>=2.2.0
