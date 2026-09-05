@@ -14,13 +14,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 SECRET_KEY = "django-insecure-smart-scan-demo-only-change-in-production"
 DEBUG = True
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '0.0.0.0',
-    'testserver',
-    'smart-scan-strategy-complete.onrender.com'
-]
+ALLOWED_HOSTS = ['.onrender.com', 'localhost', '127.0.0.1']
+
 
 
 INSTALLED_APPS = [
